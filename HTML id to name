@@ -1,0 +1,248 @@
+<html lang="en"><head><base target="_blank">
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlayFab Steam Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            color: #4caf50;
+            margin-bottom: 30px;
+        }
+        form {
+            background: #2c2c2c;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background-color: #333;
+            color: #e0e0e0;
+        }
+        button {
+            background-color: #4caf50;
+            color: #fff;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2c2c2c;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+            overflow-y: auto;
+            max-height: 200px;
+            color: #e0e0e0;
+        }
+        .log-entry {
+            margin-bottom: 10px;
+        }
+        #accountInfo {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2c2c2c;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        .account-item {
+            margin-bottom: 10px;
+            color: #a5d6a7;
+        }
+        .account-item strong {
+            color: #cddc39;
+        }
+    </style>
+</head>
+<body>
+    <h1>PlayFab Steam Authentication</h1>
+    <form id="authForm">
+        <label for="playfabId">PlayFab ID:</label>
+        <input type="text" id="playfabId" name="playfabId" placeholder="Enter your PlayFab ID" required="">
+        
+        <label for="steamTicket">Steam Ticket:</label>
+        <input type="text" id="steamTicket" name="steamTicket" placeholder="Enter your Steam Ticket" required="">
+
+        <button type="submit">Authenticate</button>
+    </form>
+    <div id="response"></div>
+    <div id="log"></div>
+    <div id="accountInfo"></div>
+
+    <script>
+        function logEntry(type, message) {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<strong>${type}:</strong> ${message}`;
+            logDiv.appendChild(entry);
+
+            // Cleanup old log entries to keep the log readable
+            const logEntries = logDiv.children;
+            if (logEntries.length > 20) { // Limit to the most recent 20 entries
+                logDiv.removeChild(logEntries[0]);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+        }
+
+        function displayAccountInfo(accountData) {
+            const accountInfoDiv = document.getElementById('accountInfo');
+            const accountInfo = accountData.AccountInfo || {};
+            const steamInfo = accountInfo.SteamInfo || {};
+            const privateInfo = accountInfo.PrivateInfo || {};
+
+            accountInfoDiv.innerHTML = `
+                <div class="account-item"><strong>PlayFab ID:</strong> ${accountInfo.PlayFabId || 'N/A'}</div>
+                <div class="account-item"><strong>Display Name:</strong> ${accountInfo.TitleInfo?.DisplayName || 'N/A'}</div>
+                <div class="account-item"><strong>Email:</strong> ${privateInfo.Email || 'N/A'}</div>
+                <div class="account-item"><strong>Steam Name:</strong> ${steamInfo.SteamName || 'N/A'}</div>
+                <div class="account-item"><strong>Country:</strong> ${steamInfo.SteamCountry || 'N/A'}</div>
+                <div class="account-item"><strong>Currency:</strong> ${steamInfo.SteamCurrency || 'N/A'}</div>
+                <div class="account-item"><strong>Created:</strong> ${accountInfo.Created ? formatDate(accountInfo.Created) : 'N/A'}</div>
+                <div class="account-item"><strong>Last Login Time:</strong> ${accountInfo.TitleInfo?.LastLogin ? formatDate(accountInfo.TitleInfo.LastLogin) : 'N/A'}</div>
+                <div class="account-item"><strong>Banned:</strong> ${accountInfo.TitleInfo?.isBanned ? 'Yes' : 'No'}</div>
+            `;
+        }
+
+        document.getElementById('authForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const playfabId = document.getElementById('playfabId').value;
+            const steamTicket = document.getElementById('steamTicket').value;
+            const playfabTitleId = '63FDD'; // Your predefined PlayFab Title ID
+            
+            const loginUrl = `https://${playfabTitleId}.playfabapi.com/Client/LoginWithSteam`;
+            const getAccountInfoUrl = `https://${playfabTitleId}.playfabapi.com/Client/GetAccountInfo`;
+            const getCosmeticsControllerUrl = `https://${playfabTitleId}.playfabapi.com/Client/GetPlayerCombinedInfo`;
+            const loginPayload = {
+                SteamTicket: steamTicket,
+                TitleId: playfabTitleId,
+                CreateAccount: true
+            };
+
+            try {
+                logEntry('Request', `POST ${loginUrl} - ${JSON.stringify(loginPayload)}`);
+                const loginResponse = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(loginPayload)
+                });
+                const loginData = await loginResponse.json();
+                logEntry('Response', `POST ${loginUrl} - ${JSON.stringify(loginData)}`);
+                
+                if (loginData.data) {
+                    const sessionTicket = loginData.data.SessionTicket;
+                    const accountInfoPayload = {
+                        PlayFabId: playfabId
+                    };
+                    
+                    logEntry('Request', `POST ${getAccountInfoUrl} - ${JSON.stringify(accountInfoPayload)}`);
+                    const accountInfoResponse = await fetch(getAccountInfoUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Authorization': sessionTicket
+                        },
+                        body: JSON.stringify(accountInfoPayload)
+                    });
+                    const accountInfoData = await accountInfoResponse.json();
+                    logEntry('Response', `POST ${getAccountInfoUrl} - ${JSON.stringify(accountInfoData)}`);
+                    
+                    if (accountInfoData.data) {
+                        displayAccountInfo(accountInfoData.data);
+
+                        const displayName = accountInfoData.data.AccountInfo.TitleInfo?.DisplayName || 'N/A';
+                        const oculusID = accountInfoData.data.AccountInfo.CustomData?.['PlayFabAuthenticator.oculusID'] || 'N/A';
+                        
+                        const cosmeticsControllerPayload = {
+                            PlayFabId: playfabId,
+                            InfoRequestParameters: {
+                                GetUserData: true
+                            }
+                        };
+
+                        logEntry('Request', `POST ${getCosmeticsControllerUrl} - ${JSON.stringify(cosmeticsControllerPayload)}`);
+                        const cosmeticsControllerResponse = await fetch(getCosmeticsControllerUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Authorization': sessionTicket
+                            },
+                            body: JSON.stringify(cosmeticsControllerPayload)
+                        });
+                        const cosmeticsControllerData = await cosmeticsControllerResponse.json();
+                        logEntry('Response', `POST ${getCosmeticsControllerUrl} - ${JSON.stringify(cosmeticsControllerData)}`);
+                        
+                        const concatStringCosmeticsAllowed = cosmeticsControllerData.data?.UserData?.['CosmeticsController.concatStringCosmeticsAllowed']?.Value || 'N/A';
+                        const gorillaNetworkingCosmeticsController = cosmeticsControllerData.data?.UserData?.['GorillaNetworking.CosmeticsController']?.Value || 'N/A';
+
+                        document.getElementById('response').innerHTML = `
+                            <div class="response-item"><strong>Display Name:</strong> ${displayName}</div>
+                            <div class="response-item"><strong>Oculus ID:</strong> ${oculusID}</div>
+                            <div class="response-item"><strong>CosmeticsController.concatStringCosmeticsAllowed:</strong> ${concatStringCosmeticsAllowed}</div>
+                            <div class="response-item"><strong>GorillaNetworking.CosmeticsController:</strong> ${gorillaNetworkingCosmeticsController}</div>
+                        `;
+                    } else {
+                        document.getElementById('response').textContent = 'Failed to retrieve account info: ' + JSON.stringify(accountInfoData);
+                    }
+                } else {
+                    document.getElementById('response').textContent = 'Authentication failed: ' + JSON.stringify(loginData);
+                }
+            } catch (error) {
+                logEntry('Error', error);
+                document.getElementById('response').textContent = 'Error: ' + error;
+            }
+        });
+    </script>
+
+
+</body></html>
